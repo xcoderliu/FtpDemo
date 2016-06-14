@@ -23,6 +23,7 @@ enum {
     size_t            bufferOffset;
     size_t            bufferLimit;
     uint8_t  _buffer[kSendBufferSize];
+    BOOL isDir;
 }
 @end
 
@@ -30,6 +31,7 @@ enum {
 
 @synthesize userName;
 @synthesize userPwd;
+@synthesize finishBlock;
 
 + (LZMFtpUpload *)sharedInstance
 {
@@ -59,11 +61,75 @@ enum {
     return (networkStream != nil);
 }
 
+- (void)startCreateDir:(NSString *)host :(NSString *)dirName {
+    if (isSending) {
+        return;
+    }
+    isDir = YES;
+    
+    bufferOffset = bufferLimit = 0;
+    memset(buffer, 0, kSendBufferSize);
+    
+    BOOL                    success;
+    NSURL *                 url;
+    
+    assert(dirName != nil);
+    
+    assert(networkStream == nil);      // don't tap send twice in a row!
+    assert(fileStream == nil);         //
+    
+    // First get and check the URL.
+    
+    url = [[NetworkManager sharedInstance] smartFtpURLForString:host];
+    success = (url != nil);
+    
+    if (success) {
+        // Add the last part of the file name to the end of the URL to form the final
+        // URL that we're going to put to.
+        
+        url = CFBridgingRelease(
+                                CFURLCreateCopyAppendingPathComponent(NULL, (__bridge CFURLRef) url, (__bridge CFStringRef) dirName, true)
+                                );
+        success = (url != nil);
+    }
+    
+    // If the URL is bogus, let the user know.  Otherwise kick off the connection.
+    
+    if ( ! success) {
+        //@"Invalid URL";
+    } else {
+        
+        
+        // Open a CFFTPStream for the URL.
+        networkStream = CFBridgingRelease(CFWriteStreamCreateWithFTPURL(NULL, (__bridge CFURLRef) url));
+        
+        
+        assert(networkStream != nil);
+        
+        if ([userName length] != 0) {
+            success = [networkStream setProperty:userName forKey:(id)kCFStreamPropertyFTPUserName];
+            assert(success);
+            success = [networkStream setProperty:userPwd forKey:(id)kCFStreamPropertyFTPPassword];
+            assert(success);
+        }
+        
+        networkStream.delegate = self;
+        [networkStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+        [networkStream open];
+        
+        // Tell the UI we're sending.
+        
+        [self sendDidStart];
+    }
+}
+
 - (void)startSendFile:(NSString*)host :(NSString*)filePath {
     
     if (isSending) {
         return;
     }
+    
+    isDir = NO;
     
     bufferOffset = bufferLimit = 0;
     memset(buffer, 0, kSendBufferSize);
@@ -107,7 +173,6 @@ enum {
         [fileStream open];
         
         // Open a CFFTPStream for the URL.
-        
         networkStream = CFBridgingRelease(CFWriteStreamCreateWithFTPURL(NULL, (__bridge CFURLRef) url));
         
         
@@ -144,6 +209,9 @@ enum {
     switch (eventCode) {
         case NSStreamEventOpenCompleted: {
             [self updateStatus:@"Opened connection"];
+            if (isDir) {
+                [self stopSendWithStatus:@"create success"];
+            }
         } break;
         case NSStreamEventHasBytesAvailable: {
             assert(NO);     // should never happen for the output stream
@@ -161,7 +229,7 @@ enum {
                 if (bytesRead == -1) {
                     [self stopSendWithStatus:@"File read error"];
                 } else if (bytesRead == 0) {
-                    [self stopSendWithStatus:nil];
+                    [self stopSendWithStatus:@"upload success"];
                 } else {
                     bufferOffset = 0;
                     bufferLimit  = bytesRead;
@@ -223,5 +291,8 @@ enum {
 {
     NSLog(@"Stop:%@",statusString);
     [[NetworkManager sharedInstance] didStopNetworkOperation];
+    if (finishBlock) {
+        finishBlock();
+    }
 }
 @end

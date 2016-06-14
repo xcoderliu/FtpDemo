@@ -7,11 +7,13 @@
 //
 
 #import <Foundation/Foundation.h>
-
+typedef void (^LZMFtpUploadStopBlock)();
 @interface LZMFtpUpload : NSObject
 + (LZMFtpUpload *)sharedInstance;
 - (void)startSendFile:(NSString*)host :(NSString*)filePath;
+- (void)startCreateDir:(NSString *)host :(NSString *)dirName;
 - (BOOL)isSending;
 @property (nonatomic,strong) NSString *userName;
 @property (nonatomic,strong) NSString *userPwd;
+@property (nonatomic,strong) LZMFtpUploadStopBlock finishBlock;
 @end
