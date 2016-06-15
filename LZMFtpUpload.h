@@ -7,7 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
-typedef void (^LZMFtpUploadStopBlock)();
+typedef void (^LZMFtpUploadStopBlock)(BOOL isSuccess);
 @interface LZMFtpUpload : NSObject
 + (LZMFtpUpload *)sharedInstance;
 - (void)startSendFile:(NSString*)host :(NSString*)filePath;

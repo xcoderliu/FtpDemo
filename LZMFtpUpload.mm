@@ -290,9 +290,10 @@ enum {
 - (void)sendDidStopWithStatus:(NSString *)statusString
 {
     NSLog(@"Stop:%@",statusString);
+    BOOL success = [statusString containsString:@"success"];
     [[NetworkManager sharedInstance] didStopNetworkOperation];
     if (finishBlock) {
-        finishBlock();
+        finishBlock(success);
     }
 }
 @end
